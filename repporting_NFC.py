@@ -150,6 +150,62 @@ if ref_file and weekly_file:
             ws2.set_column('B:D', 15)
             ws2.set_column('E:E', 15)
 
+            # --- FEUILLE 3 : REPORTING DR-RAVT-PVT ---
+            ws3 = workbook.add_worksheet('REPORTING DR-RAVT-PVT')
+            for c, h in enumerate(headers): ws3.write(0, c, h, h_fmt)
+
+            # IMPORTANT : Filtrer uniquement les PVT pour cette feuille
+            df_pvt = df_final[df_final['ACCUEIL'].astype(str).str.startswith('PVT')].copy()
+
+            curr_row = 1
+            # On trie par DR, RAVT, PVT (ACCUEIL)
+            for dr, dr_group in df_pvt.groupby('DR', sort=True):
+                # Vérifier que le groupe n'est pas vide
+                if len(dr_group) == 0 or dr_group['TOTAL OPERATION'].sum() == 0:
+                    continue
+
+                # Ligne DR
+                n_dr, m_dr, t_dr = dr_group['OPERATION NFC'].sum(), dr_group['OPERATION MANUELLE'].sum(), dr_group['TOTAL OPERATION'].sum()
+                ws3.write(curr_row, 0, dr, dr_fmt)
+                ws3.write(curr_row, 1, n_dr, dr_fmt)
+                ws3.write(curr_row, 2, m_dr, dr_fmt)
+                ws3.write(curr_row, 3, t_dr, dr_fmt)
+                ws3.write(curr_row, 4, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_fmt)
+                curr_row += 1
+
+                for ravt, ravt_group in dr_group.groupby('RAVT', sort=True):
+                    # Vérifier que le groupe n'est pas vide
+                    if len(ravt_group) == 0 or ravt_group['TOTAL OPERATION'].sum() == 0:
+                        continue
+
+                    # Ligne RAVT
+                    n_r, m_r, t_r = ravt_group['OPERATION NFC'].sum(), ravt_group['OPERATION MANUELLE'].sum(), ravt_group['TOTAL OPERATION'].sum()
+                    ws3.write(curr_row, 0, ravt, sadi_fmt)
+                    ws3.write(curr_row, 1, n_r, sadi_fmt)
+                    ws3.write(curr_row, 2, m_r, sadi_fmt)
+                    ws3.write(curr_row, 3, t_r, sadi_fmt)
+                    ws3.write(curr_row, 4, (n_r/t_r*100) if t_r > 0 else 0, sadi_fmt)
+                    curr_row += 1
+
+                    for pvt, pvt_group in ravt_group.groupby('ACCUEIL', sort=True):
+                        # Vérifier que le groupe n'est pas vide
+                        if len(pvt_group) == 0 or pvt_group['TOTAL OPERATION'].sum() == 0:
+                            continue
+
+                        # Ligne PVT (ACCUEIL)
+                        n_p, m_p, t_p = pvt_group['OPERATION NFC'].sum(), pvt_group['OPERATION MANUELLE'].sum(), pvt_group['TOTAL OPERATION'].sum()
+                        ws3.write(curr_row, 0, pvt, ravt_fmt)
+                        ws3.write(curr_row, 1, n_p, ravt_fmt)
+                        ws3.write(curr_row, 2, m_p, ravt_fmt)
+                        ws3.write(curr_row, 3, t_p, ravt_fmt)
+                        ws3.write(curr_row, 4, (n_p/t_p*100) if t_p > 0 else 0, ravt_fmt)
+                        curr_row += 1
+
+            # Appliquer la largeur des colonnes
+            ws3.set_column('A:A', 45)
+            ws3.set_column('B:D', 15)
+            ws3.set_column('E:E', 15)
+
         st.success("✅ Fichier corrigé généré avec succès !")
         st.download_button("📥 Télécharger le Reporting Final", output.getvalue(), "Reporting_NFC_Orange_Final.xlsx")
 
