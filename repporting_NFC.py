@@ -73,10 +73,14 @@ if ref_file and weekly_file:
             # FORMATS
             h_fmt = workbook.add_format({'bold': True, 'bg_color': '#FF6600', 'font_color': 'white', 'border': 1, 'align': 'center'})
             dr_fmt = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'border': 1})
+            dr_taux_fmt = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'border': 1, 'num_format': '0"%"'})
             sadi_fmt = workbook.add_format({'bold': True, 'bg_color': '#F2F2F2', 'border': 1, 'indent': 1})
+            sadi_taux_fmt = workbook.add_format({'bold': True, 'bg_color': '#F2F2F2', 'border': 1, 'indent': 1, 'num_format': '0"%"'})
             ravt_fmt = workbook.add_format({'border': 1, 'indent': 2})
+            ravt_taux_fmt = workbook.add_format({'border': 1, 'indent': 2, 'num_format': '0"%"'})
             num_fmt = workbook.add_format({'border': 1, 'align': 'center'})
-            taux_fmt = workbook.add_format({'border': 1, 'num_format': '0.00', 'align': 'center'})
+            taux_fmt = workbook.add_format({'border': 1, 'num_format': '0"%"', 'align': 'center'})
+            total_fmt = workbook.add_format({'bold': True, 'bg_color': '#FF6600', 'font_color': 'white', 'border': 1, 'align': 'center'})
 
             headers = ['DR', 'OP NFC', 'OP MANUELLE', 'TOTAL', 'Taux']
 
@@ -95,6 +99,20 @@ if ref_file and weekly_file:
                 ws1.write(i+1, 3, r['TOTAL OPERATION'], num_fmt)
                 t_val = (r['OPERATION NFC'] / r['TOTAL OPERATION'] * 100) if r['TOTAL OPERATION'] > 0 else 0
                 ws1.write(i+1, 4, t_val, taux_fmt)
+
+            # Ligne TOTAL en bas
+            total_row = len(synthese_dr) + 1
+            total_nfc = synthese_dr['OPERATION NFC'].sum()
+            total_man = synthese_dr['OPERATION MANUELLE'].sum()
+            total_op = synthese_dr['TOTAL OPERATION'].sum()
+            taux_total = (total_nfc / total_op * 100) if total_op > 0 else 0
+
+            ws1.write(total_row, 0, 'TOTAL', total_fmt)
+            ws1.write(total_row, 1, total_nfc, total_fmt)
+            ws1.write(total_row, 2, total_man, total_fmt)
+            ws1.write(total_row, 3, total_op, total_fmt)
+            ws1.write(total_row, 4, taux_total, total_fmt)
+
             ws1.set_column('A:E', 18)
 
             # --- FEUILLE 2 : REPORTING DR-SADI-RAVT ---
@@ -114,7 +132,7 @@ if ref_file and weekly_file:
                 ws2.write(curr_row, 1, n_dr, dr_fmt)
                 ws2.write(curr_row, 2, m_dr, dr_fmt)
                 ws2.write(curr_row, 3, t_dr, dr_fmt)
-                ws2.write(curr_row, 4, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_fmt)
+                ws2.write(curr_row, 4, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_taux_fmt)
                 curr_row += 1
 
                 for sadi, sadi_group in dr_group.groupby('SADI', sort=True):
@@ -128,7 +146,7 @@ if ref_file and weekly_file:
                     ws2.write(curr_row, 1, n_s, sadi_fmt)
                     ws2.write(curr_row, 2, m_s, sadi_fmt)
                     ws2.write(curr_row, 3, t_s, sadi_fmt)
-                    ws2.write(curr_row, 4, (n_s/t_s*100) if t_s > 0 else 0, sadi_fmt)
+                    ws2.write(curr_row, 4, (n_s/t_s*100) if t_s > 0 else 0, sadi_taux_fmt)
                     curr_row += 1
 
                     for ravt, ravt_group in sadi_group.groupby('RAVT', sort=True):
@@ -142,7 +160,7 @@ if ref_file and weekly_file:
                         ws2.write(curr_row, 1, n_r, ravt_fmt)
                         ws2.write(curr_row, 2, m_r, ravt_fmt)
                         ws2.write(curr_row, 3, t_r, ravt_fmt)
-                        ws2.write(curr_row, 4, (n_r/t_r*100) if t_r > 0 else 0, ravt_fmt)
+                        ws2.write(curr_row, 4, (n_r/t_r*100) if t_r > 0 else 0, ravt_taux_fmt)
                         curr_row += 1
 
             # Appliquer la largeur des colonnes SANS format par défaut
@@ -170,7 +188,7 @@ if ref_file and weekly_file:
                 ws3.write(curr_row, 1, n_dr, dr_fmt)
                 ws3.write(curr_row, 2, m_dr, dr_fmt)
                 ws3.write(curr_row, 3, t_dr, dr_fmt)
-                ws3.write(curr_row, 4, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_fmt)
+                ws3.write(curr_row, 4, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_taux_fmt)
                 curr_row += 1
 
                 for ravt, ravt_group in dr_group.groupby('RAVT', sort=True):
@@ -184,7 +202,7 @@ if ref_file and weekly_file:
                     ws3.write(curr_row, 1, n_r, sadi_fmt)
                     ws3.write(curr_row, 2, m_r, sadi_fmt)
                     ws3.write(curr_row, 3, t_r, sadi_fmt)
-                    ws3.write(curr_row, 4, (n_r/t_r*100) if t_r > 0 else 0, sadi_fmt)
+                    ws3.write(curr_row, 4, (n_r/t_r*100) if t_r > 0 else 0, sadi_taux_fmt)
                     curr_row += 1
 
                     for pvt, pvt_group in ravt_group.groupby('ACCUEIL', sort=True):
@@ -198,13 +216,87 @@ if ref_file and weekly_file:
                         ws3.write(curr_row, 1, n_p, ravt_fmt)
                         ws3.write(curr_row, 2, m_p, ravt_fmt)
                         ws3.write(curr_row, 3, t_p, ravt_fmt)
-                        ws3.write(curr_row, 4, (n_p/t_p*100) if t_p > 0 else 0, ravt_fmt)
+                        ws3.write(curr_row, 4, (n_p/t_p*100) if t_p > 0 else 0, ravt_taux_fmt)
                         curr_row += 1
 
             # Appliquer la largeur des colonnes
             ws3.set_column('A:A', 45)
             ws3.set_column('B:D', 15)
             ws3.set_column('E:E', 15)
+
+            # --- FEUILLE 4 : REPORTING DR-RAVT-PVT-VTO ---
+            ws4 = workbook.add_worksheet('REPORTING DR-RAVT-PVT-VTO')
+            headers_vto = ['DR/RAVT/PVT/VTO', 'Prénom', 'Nom', 'LOGIN', 'OP NFC', 'OP MANUELLE', 'TOTAL', 'Taux']
+            for c, h in enumerate(headers_vto): ws4.write(0, c, h, h_fmt)
+
+            vto_fmt = workbook.add_format({'border': 1, 'indent': 3, 'font_size': 9})
+            vto_num_fmt = workbook.add_format({'border': 1, 'align': 'center', 'font_size': 9})
+            vto_taux_fmt = workbook.add_format({'border': 1, 'num_format': '0"%"', 'align': 'center', 'font_size': 9})
+
+            curr_row = 1
+            for dr, dr_group in df_pvt.groupby('DR', sort=True):
+                if len(dr_group) == 0 or dr_group['TOTAL OPERATION'].sum() == 0:
+                    continue
+
+                # Ligne DR
+                n_dr, m_dr, t_dr = dr_group['OPERATION NFC'].sum(), dr_group['OPERATION MANUELLE'].sum(), dr_group['TOTAL OPERATION'].sum()
+                ws4.write(curr_row, 0, dr, dr_fmt)
+                ws4.write(curr_row, 4, n_dr, dr_fmt)
+                ws4.write(curr_row, 5, m_dr, dr_fmt)
+                ws4.write(curr_row, 6, t_dr, dr_fmt)
+                ws4.write(curr_row, 7, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_taux_fmt)
+                curr_row += 1
+
+                for ravt, ravt_group in dr_group.groupby('RAVT', sort=True):
+                    if len(ravt_group) == 0 or ravt_group['TOTAL OPERATION'].sum() == 0:
+                        continue
+
+                    # Ligne RAVT
+                    n_r, m_r, t_r = ravt_group['OPERATION NFC'].sum(), ravt_group['OPERATION MANUELLE'].sum(), ravt_group['TOTAL OPERATION'].sum()
+                    ws4.write(curr_row, 0, ravt, sadi_fmt)
+                    ws4.write(curr_row, 4, n_r, sadi_fmt)
+                    ws4.write(curr_row, 5, m_r, sadi_fmt)
+                    ws4.write(curr_row, 6, t_r, sadi_fmt)
+                    ws4.write(curr_row, 7, (n_r/t_r*100) if t_r > 0 else 0, sadi_taux_fmt)
+                    curr_row += 1
+
+                    for pvt, pvt_group in ravt_group.groupby('ACCUEIL', sort=True):
+                        if len(pvt_group) == 0 or pvt_group['TOTAL OPERATION'].sum() == 0:
+                            continue
+
+                        # Ligne PVT
+                        n_p, m_p, t_p = pvt_group['OPERATION NFC'].sum(), pvt_group['OPERATION MANUELLE'].sum(), pvt_group['TOTAL OPERATION'].sum()
+                        ws4.write(curr_row, 0, pvt, ravt_fmt)
+                        ws4.write(curr_row, 4, n_p, ravt_fmt)
+                        ws4.write(curr_row, 5, m_p, ravt_fmt)
+                        ws4.write(curr_row, 6, t_p, ravt_fmt)
+                        ws4.write(curr_row, 7, (n_p/t_p*100) if t_p > 0 else 0, ravt_taux_fmt)
+                        curr_row += 1
+
+                        # Lignes VTO (détail par LOGIN)
+                        for _, vto_row in pvt_group.iterrows():
+                            prenom = vto_row.get('PRENOM', '')
+                            nom = vto_row.get('NOM', '')
+                            login = vto_row.get('LOGIN', '')
+                            n_v = vto_row['OPERATION NFC']
+                            m_v = vto_row['OPERATION MANUELLE']
+                            t_v = vto_row['TOTAL OPERATION']
+
+                            ws4.write(curr_row, 0, 'VTO', vto_fmt)
+                            ws4.write(curr_row, 1, prenom, vto_fmt)
+                            ws4.write(curr_row, 2, nom, vto_fmt)
+                            ws4.write(curr_row, 3, login, vto_fmt)
+                            ws4.write(curr_row, 4, n_v, vto_num_fmt)
+                            ws4.write(curr_row, 5, m_v, vto_num_fmt)
+                            ws4.write(curr_row, 6, t_v, vto_num_fmt)
+                            ws4.write(curr_row, 7, (n_v/t_v*100) if t_v > 0 else 0, vto_taux_fmt)
+                            curr_row += 1
+
+            ws4.set_column('A:A', 35)
+            ws4.set_column('B:C', 20)
+            ws4.set_column('D:D', 25)
+            ws4.set_column('E:G', 15)
+            ws4.set_column('H:H', 15)
 
         st.success("✅ Fichier corrigé généré avec succès !")
         st.download_button("📥 Télécharger le Reporting Final", output.getvalue(), "Reporting_NFC_Orange_Final.xlsx")
