@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import io
 
-st.set_page_config(page_title="Orange NFC Synthesis", layout="wide")
+st.set_page_config(page_title="Orange NFC - Reporting Officiel", layout="wide")
 
-st.title("📊 Synthèse NFC par Direction Régionale")
+st.title("📊 Reporting NFC : Synthèse & Détail DR-SADI-RAVT")
 
-# Mapping officiel fourni
+# Mapping officiel des DR
 DR_MAPPING = {
     'DV-DRVE_DIRECTION REGIONALE DES VENTES EST': 'DRE',
     'DV-DRVC_DIRECTION REGIONALE DES VENTES CENTRE': 'DRC',
@@ -14,89 +14,144 @@ DR_MAPPING = {
     'DV-DRVSE_DIRECTION REGIONALE DES VENTES SUD-EST': 'DRSE',
     'DV-DRV2_DIRECTION REGIONALE DES VENTES DAKAR 2': 'DR2',
     'DV-DRV1_DIRECTION REGIONALE DES VENTES DAKAR 1': 'DR1',
-    "DV-DRVS_DIRECTION REGIONALE DES VENTES SUD": "DRS"
+    'DV-DRVS_DIRECTION REGIONALE DES VENTES SUD': 'DRS'
 }
 
-uploaded_file = st.file_uploader("Déposez le fichier WEEKLY STAT NFC", type=["csv", "xlsx", "xlsb"])
+col1, col2 = st.columns(2)
+with col1:
+    ref_file = st.file_uploader("1. Déposez le RÉFÉRENTIEL (Mapping)", type=["csv", "xlsx"])
+with col2:
+    weekly_file = st.file_uploader("2. Déposez le fichier WEEKLY STAT NFC", type=["csv", "xlsx", "xlsb"])
 
-if uploaded_file:
+if ref_file and weekly_file:
     try:
-        # 1. Lecture du fichier
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file, sep=';')
-        elif uploaded_file.name.endswith('.xlsb'):
-            df = pd.read_excel(uploaded_file, engine='pyxlsb')
+        # --- 1. LECTURE ET NETTOYAGE DU RÉFÉRENTIEL ---
+        df_ref = pd.read_csv(ref_file) if ref_file.name.endswith('.csv') else pd.read_excel(ref_file)
+        df_ref.columns = [str(c).strip() for c in df_ref.columns]
+        # On garde une seule ligne par LOGIN pour ne pas multiplier les stats
+        df_ref = df_ref[['LOGIN', 'SADI', 'RAVT']].drop_duplicates(subset=['LOGIN'])
+
+        # --- 2. LECTURE DU WEEKLY ---
+        if weekly_file.name.endswith('.csv'):
+            df_weekly = pd.read_csv(weekly_file, sep=';')
+        elif weekly_file.name.endswith('.xlsb'):
+            df_weekly = pd.read_excel(weekly_file, engine='pyxlsb')
         else:
-            df = pd.read_excel(uploaded_file)
+            df_weekly = pd.read_excel(weekly_file)
 
-        # Nettoyage des noms de colonnes
-        df.columns = [str(c).strip() for c in df.columns]
+        df_weekly.columns = [str(c).strip() for c in df_weekly.columns]
 
-        # 2. Filtrage et Renommage des DR
-        # On utilise la colonne 'AGENCE' comme indiqué
-        if 'AGENCE' in df.columns:
-            # On ne garde que les lignes dont l'AGENCE est dans notre mapping
-            df = df[df['AGENCE'].isin(DR_MAPPING.keys())].copy()
-            # On renomme avec les abréviations
-            df['DR'] = df['AGENCE'].map(DR_MAPPING)
-        else:
-            st.error("La colonne 'AGENCE' est introuvable dans le fichier.")
-            st.stop()
+        # --- 3. TRAITEMENT ---
+        # Filtrage et renommage des DR initial
+        df_weekly = df_weekly[df_weekly['AGENCE'].isin(DR_MAPPING.keys())].copy()
+        df_weekly['DR'] = df_weekly['AGENCE'].map(DR_MAPPING)
 
-        # 3. Calcul de la Synthèse par DR
-        # On groupe par la nouvelle colonne 'DR' et on somme les valeurs
-        synthese = df.groupby('DR').agg({
-            'OPERATION NFC': 'sum',
-            'OPERATION MANUELLE': 'sum',
-            'TOTAL OPERATION': 'sum'
-        }).reset_index()
+        # Jointure INNER pour ne garder que ce qui est mappé (Supprime les "Inconnus")
+        df_final = pd.merge(df_weekly, df_ref, on='LOGIN', how='inner')
 
-        # 4. Calcul du TAUX NFC
-        # Formule : (NFC / TOTAL) * 100
-        synthese['TAUX NFC'] = (synthese['OPERATION NFC'] / synthese['TOTAL OPERATION']) * 100
+        # Nettoyage strict des lignes vides ou sans SADI/RAVT
+        df_final = df_final.dropna(subset=['SADI', 'RAVT'])
+        df_final = df_final[(df_final['SADI'].astype(str).str.strip() != "") &
+                            (df_final['RAVT'].astype(str).str.strip() != "")]
 
-        # Tri par performance (Optionnel)
-        synthese = synthese.sort_values('TAUX NFC', ascending=False)
+        # CORRECTION : Garder seulement le SADI qui correspond au DR du LOGIN
+        # Cela évite qu'un SADI apparaisse dans plusieurs DR
+        df_final = df_final.drop_duplicates(subset=['LOGIN', 'SADI', 'RAVT', 'DR'])
 
-        # 5. Affichage du tableau style "Reporting"
-        st.subheader("📈 Tableau de Synthèse par DR")
+        # Nettoyer les valeurs numériques nulles ou invalides
+        df_final = df_final[
+            (df_final['OPERATION NFC'].notna()) &
+            (df_final['OPERATION MANUELLE'].notna()) &
+            (df_final['TOTAL OPERATION'].notna())
+        ]
 
-        # Formatage pour l'affichage Streamlit (pour voir les % proprement)
-        st.dataframe(
-            synthese.style.format({'TAUX NFC': '{:.2f}%'}),
-            use_container_width=True
-        )
-
-        # 6. Export EXCEL avec mise en forme
+        # --- 4. GÉNÉRATION EXCEL ---
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            synthese.to_excel(writer, sheet_name='SYNTHESE DR', index=False)
-
             workbook = writer.book
-            worksheet = writer.sheets['SYNTHESE DR']
 
-            # Formats
-            header_format = workbook.add_format({
-                'bold': True, 'bg_color': '#FF6600', 'font_color': 'white', 'border': 1, 'align': 'center'
-            })
-            num_format = workbook.add_format({'border': 1, 'align': 'center'})
-            pct_format = workbook.add_format({'border': 1, 'align': 'center', 'num_format': '0.00"%"'})
+            # FORMATS
+            h_fmt = workbook.add_format({'bold': True, 'bg_color': '#FF6600', 'font_color': 'white', 'border': 1, 'align': 'center'})
+            dr_fmt = workbook.add_format({'bold': True, 'bg_color': '#D9E1F2', 'border': 1})
+            sadi_fmt = workbook.add_format({'bold': True, 'bg_color': '#F2F2F2', 'border': 1, 'indent': 1})
+            ravt_fmt = workbook.add_format({'border': 1, 'indent': 2})
+            num_fmt = workbook.add_format({'border': 1, 'align': 'center'})
+            taux_fmt = workbook.add_format({'border': 1, 'num_format': '0.00', 'align': 'center'})
 
-            # Appliquer les formats aux en-têtes
-            for col_num, value in enumerate(synthese.columns.values):
-                worksheet.write(0, col_num, value, header_format)
-                worksheet.set_column(col_num, col_num, 20)
+            headers = ['DR', 'OP NFC', 'OP MANUELLE', 'TOTAL', 'Taux']
 
-            # Appliquer le format pourcentage à la dernière colonne
-            for row_num in range(1, len(synthese) + 1):
-                worksheet.write(row_num, 4, synthese.iloc[row_num-1, 4] / 100, pct_format)
+            # --- FEUILLE 1 : SYNTHESE DR ---
+            ws1 = workbook.add_worksheet('SYNTHESE DR')
+            for c, h in enumerate(headers): ws1.write(0, c, h, h_fmt)
 
-        st.download_button(
-            label="📥 Télécharger la Synthèse DR (Excel)",
-            data=output.getvalue(),
-            file_name="Synthese_NFC_par_DR.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+            synthese_dr = df_final.groupby('DR').agg({
+                'OPERATION NFC': 'sum', 'OPERATION MANUELLE': 'sum', 'TOTAL OPERATION': 'sum'
+            }).reset_index()
+
+            for i, r in synthese_dr.iterrows():
+                ws1.write(i+1, 0, r['DR'], num_fmt)
+                ws1.write(i+1, 1, r['OPERATION NFC'], num_fmt)
+                ws1.write(i+1, 2, r['OPERATION MANUELLE'], num_fmt)
+                ws1.write(i+1, 3, r['TOTAL OPERATION'], num_fmt)
+                t_val = (r['OPERATION NFC'] / r['TOTAL OPERATION'] * 100) if r['TOTAL OPERATION'] > 0 else 0
+                ws1.write(i+1, 4, t_val, taux_fmt)
+            ws1.set_column('A:E', 18)
+
+            # --- FEUILLE 2 : REPORTING DR-SADI-RAVT ---
+            ws2 = workbook.add_worksheet('REPORTING DR-SADI-RAVT')
+            for c, h in enumerate(headers): ws2.write(0, c, h, h_fmt)
+
+            curr_row = 1
+            # On trie par DR, SADI, RAVT pour une cascade parfaite
+            for dr, dr_group in df_final.groupby('DR', sort=True):
+                # Vérifier que le groupe n'est pas vide
+                if len(dr_group) == 0 or dr_group['TOTAL OPERATION'].sum() == 0:
+                    continue
+
+                # Ligne DR
+                n_dr, m_dr, t_dr = dr_group['OPERATION NFC'].sum(), dr_group['OPERATION MANUELLE'].sum(), dr_group['TOTAL OPERATION'].sum()
+                ws2.write(curr_row, 0, dr, dr_fmt)
+                ws2.write(curr_row, 1, n_dr, dr_fmt)
+                ws2.write(curr_row, 2, m_dr, dr_fmt)
+                ws2.write(curr_row, 3, t_dr, dr_fmt)
+                ws2.write(curr_row, 4, (n_dr/t_dr*100) if t_dr > 0 else 0, dr_fmt)
+                curr_row += 1
+
+                for sadi, sadi_group in dr_group.groupby('SADI', sort=True):
+                    # Vérifier que le groupe n'est pas vide
+                    if len(sadi_group) == 0 or sadi_group['TOTAL OPERATION'].sum() == 0:
+                        continue
+
+                    # Ligne SADI
+                    n_s, m_s, t_s = sadi_group['OPERATION NFC'].sum(), sadi_group['OPERATION MANUELLE'].sum(), sadi_group['TOTAL OPERATION'].sum()
+                    ws2.write(curr_row, 0, sadi, sadi_fmt)
+                    ws2.write(curr_row, 1, n_s, sadi_fmt)
+                    ws2.write(curr_row, 2, m_s, sadi_fmt)
+                    ws2.write(curr_row, 3, t_s, sadi_fmt)
+                    ws2.write(curr_row, 4, (n_s/t_s*100) if t_s > 0 else 0, sadi_fmt)
+                    curr_row += 1
+
+                    for ravt, ravt_group in sadi_group.groupby('RAVT', sort=True):
+                        # Vérifier que le groupe n'est pas vide
+                        if len(ravt_group) == 0 or ravt_group['TOTAL OPERATION'].sum() == 0:
+                            continue
+
+                        # Ligne RAVT
+                        n_r, m_r, t_r = ravt_group['OPERATION NFC'].sum(), ravt_group['OPERATION MANUELLE'].sum(), ravt_group['TOTAL OPERATION'].sum()
+                        ws2.write(curr_row, 0, ravt, ravt_fmt)
+                        ws2.write(curr_row, 1, n_r, ravt_fmt)
+                        ws2.write(curr_row, 2, m_r, ravt_fmt)
+                        ws2.write(curr_row, 3, t_r, ravt_fmt)
+                        ws2.write(curr_row, 4, (n_r/t_r*100) if t_r > 0 else 0, ravt_fmt)
+                        curr_row += 1
+
+            # Appliquer la largeur des colonnes SANS format par défaut
+            ws2.set_column('A:A', 45)
+            ws2.set_column('B:D', 15)
+            ws2.set_column('E:E', 15)
+
+        st.success("✅ Fichier corrigé généré avec succès !")
+        st.download_button("📥 Télécharger le Reporting Final", output.getvalue(), "Reporting_NFC_Orange_Final.xlsx")
 
     except Exception as e:
         st.error(f"Erreur : {e}")
