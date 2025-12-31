@@ -3,3 +3,9 @@ pandas
 openpyxl
 xlsxwriter
 pyxlsb
+gspread
+google-auth
+oauth2client
+plotly>=5.18.0
+kaleido==0.2.1  # Version spécifique qui fonctionne mieux
+Pillow
