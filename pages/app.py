@@ -3,7 +3,6 @@ import pandas as pd
 import io
 import re
 
-
 st.set_page_config(page_title="Orange Preactivation Specialist", layout="wide")
 
 st.title("🚀 Générateur de Reporting Préactivations")
