@@ -2,18 +2,18 @@ import streamlit as st
 
 st.set_page_config(
     page_title="Orange Tools",
-    page_icon="🍊",
+    page_icon="",
     layout="wide"
 )
 
-st.title("🍊 Outils Orange - Bienvenue")
+st.title(" Outils Orange - Bienvenue")
 
 st.markdown("""
-## Sélectionnez un outil dans le menu latéral 👈
+## Sélectionnez un outil dans le menu latéral
 
 ### Applications disponibles :
 
-**1. 🚀 Préactivations**
+**1.  Préactivations**
 - Génération de reporting des préactivations
 - Tri sélectif : Clôtures avec Statut / Rejets
 
@@ -27,7 +27,7 @@ st.markdown("""
 
 ---
 
-👈 **Utilisez le menu latéral pour accéder aux outils**
+ **Utilisez le menu latéral pour accéder aux outils**
 """)
 
-st.info("💡 Astuce : Vous pouvez basculer entre les outils en utilisant le menu de navigation à gauche.")
+st.info(" Astuce : Vous pouvez basculer entre les outils en utilisant le menu de navigation à gauche.")
