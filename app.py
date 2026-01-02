@@ -6,7 +6,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title(" Outils Orange - Bienvenue")
+st.title(" Outils Préactivations et NFC - Bienvenue")
 
 st.markdown("""
 ## Sélectionnez un outil dans le menu latéral
